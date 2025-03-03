@@ -14,14 +14,17 @@ use menu::MenuPlugin;
 
 
 fn setup(mut commands: Commands) {
-    commands.spawn(Camera2d::default());
+    commands.spawn((
+        Camera2d,
+        Msaa::Off,
+    ));
 }
 
 fn main() {
     let mut app = App::new();
     
     app.add_plugins((
-        DefaultPlugins.set(ImagePlugin::default_linear()),
+        DefaultPlugins.set(ImagePlugin::default_nearest()),
         GamePlugin,
         InputManagerPlugin::<Action>::default(),
         MenuPlugin
