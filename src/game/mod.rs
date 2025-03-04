@@ -33,7 +33,7 @@ impl Plugin for GamePlugin {
         app.add_systems(OnEnter(AppState::Game), setup_game);
         app.add_systems(OnExit(AppState::Game), destroy_game);
 
-        app.init_state::<GameState>();
-        app.init_state::<StageState>();
+        app.add_sub_state::<GameState>();
+        app.add_sub_state::<StageState>();
     }
 }

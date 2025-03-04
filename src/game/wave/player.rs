@@ -2,9 +2,11 @@ use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
 
 use crate::{
-    action::{default_input_map, Action},
-    game::{game_state::GameState, stage_state::StageState},
+    action::{Action, default_input_map},
+    game::game_state::GameState,
 };
+
+use super::wave_state::WaveState;
 
 const DEFAULT_DIRECTION: Vec2 = Vec2::Y;
 const DEFAULT_SPEED: f32 = 1.0;
@@ -24,6 +26,18 @@ impl Default for Player {
         Self {
             direction: DEFAULT_DIRECTION,
             speed: DEFAULT_SPEED,
+        }
+    }
+}
+
+fn follow_player(
+    mut camera_query: Query<&mut Transform, (With<Camera>, Without<Player>)>,
+    player_query: Query<&Transform, (With<Player>, Without<Camera>)>,
+) {
+    for mut camera_transform in camera_query.iter_mut() {
+        for player_transform in player_query.iter() {
+            camera_transform.translation.x = player_transform.translation.x;
+            camera_transform.translation.y = player_transform.translation.y;
         }
     }
 }
@@ -56,7 +70,6 @@ fn steer_player(mut query: Query<(&ActionState<Action>, &mut Player)>) {
             target_direction.x += 1.0;
         }
 
-
         if target_direction != Vec2::ZERO {
             target_direction = target_direction.normalize();
 
@@ -69,7 +82,8 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (move_player, steer_player).run_if(in_state(GameState::Running).and(in_state(StageState::Wave))),
+            (follow_player, move_player, steer_player)
+                .run_if(in_state(GameState::Running).and(in_state(WaveState::Running)))
         );
     }
 }
