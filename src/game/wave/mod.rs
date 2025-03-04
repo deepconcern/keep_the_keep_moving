@@ -170,7 +170,7 @@ fn setup_ui(asset_server: Res<AssetServer>, mut commands: Commands) {
 fn setup_terrain(
     asset_server: Res<AssetServer>,
     mut commands: Commands,
-    mut global_rng: GlobalEntropy<WyRand>
+    mut global_rng: GlobalEntropy<WyRand>,
 ) {
     let texture_handle = asset_server.load("sprites/terrain.png");
 
@@ -206,7 +206,6 @@ fn setup_terrain(
             tile_storage.set(&tile_pos, tile_entity);
         }
     }
-    
 
     let tile_size = TilemapTileSize { x: 16.0, y: 16.0 };
     let grid_size = tile_size.into();
@@ -237,7 +236,10 @@ impl Plugin for WavePlugin {
         app.add_systems(OnEnter(WaveState::Preparation), setup_countdown);
         app.add_systems(OnExit(WaveState::Preparation), destroy_countdown);
         app.add_systems(OnExit(StageState::Wave), destroy_wave);
-        app.add_systems(Update, do_countdown.run_if(in_state(WaveState::Preparation)));
+        app.add_systems(
+            Update,
+            do_countdown.run_if(in_state(WaveState::Preparation)),
+        );
 
         app.add_sub_state::<WaveState>();
     }

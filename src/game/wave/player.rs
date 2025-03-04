@@ -83,7 +83,7 @@ impl Plugin for PlayerPlugin {
         app.add_systems(
             Update,
             (follow_player, move_player, steer_player)
-                .run_if(in_state(GameState::Running).and(in_state(WaveState::Running)))
+                .run_if(in_state(GameState::Running).and(in_state(WaveState::Running))),
         );
     }
 }
