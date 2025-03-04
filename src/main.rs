@@ -6,7 +6,7 @@ mod menu;
 
 use action::Action;
 use app_state::AppState;
-use bevy::prelude::*;
+use bevy::{asset::AssetMetaCheck, prelude::*};
 use bevy_ecs_tilemap::prelude::*;
 use bevy_prng::WyRand;
 use bevy_rand::prelude::EntropyPlugin;
@@ -28,7 +28,13 @@ fn main() {
     let mut app = App::new();
 
     app.add_plugins((
-        DefaultPlugins.set(ImagePlugin::default_nearest()),
+        DefaultPlugins.set(AssetPlugin {
+            // Wasm builds will check for meta files (that don't exist) if this isn't set.
+            // This causes errors and even panics in web builds on itch.
+            // See https://github.com/bevyengine/bevy_github_ci_template/issues/48.
+            meta_check: AssetMetaCheck::Never,
+            ..default()
+        }).set(ImagePlugin::default_nearest()),
         EntropyPlugin::<WyRand>::default(),
         GamePlugin,
         InputManagerPlugin::<Action>::default(),
