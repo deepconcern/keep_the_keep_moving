@@ -12,6 +12,13 @@ leafwing-input-manager = "0.16.0"
 rand = "0.8"
 rand_core = "0.6"
 
+# These lints may be important signals about code quality, but normal Bevy code
+# commonly triggers them and the CI workflow treats them as errors, so we've
+# chosen to allow them in this template.
+[lints.clippy]
+too_many_arguments = "allow"
+type_complexity = "allow"
+
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]
 opt-level = 1
