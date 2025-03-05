@@ -1,3 +1,4 @@
+mod enemy;
 mod player;
 mod wave_state;
 
@@ -5,48 +6,39 @@ use bevy::prelude::*;
 use bevy_ecs_tilemap::prelude::*;
 use bevy_prng::WyRand;
 use bevy_rand::prelude::*;
+use enemy::{Enemy, EnemyPlugin};
 use player::{Player, PlayerPlugin};
-use rand::seq::IteratorRandom;
+use rand::{seq::IteratorRandom, Rng};
 use wave_state::WaveState;
+
+use crate::asset_handles::AssetHandles;
 
 use super::stage_state::StageState;
 const AREA_SIZE: UVec2 = UVec2::new(128, 64);
 const ARENA_SIZE: UVec2 = UVec2::new(64, 32);
+const ENEMY_SPAWN_INTERVAL: f32 = 5.0;
+const TILE_SIZE: f32 = 16.0;
 
 pub struct WavePlugin;
 
 #[derive(Component)]
 #[require(Transform, Visibility)]
-struct Wave;
+struct Wave {
+    enemy_spawn_timer: Timer,
+}
+
+impl Default for Wave {
+    fn default() -> Self {
+        Self {
+            enemy_spawn_timer: Timer::from_seconds(ENEMY_SPAWN_INTERVAL, TimerMode::Repeating),
+        }
+    }
+}
 
 fn destroy_wave(mut commands: Commands, query: Query<Entity, With<Wave>>) {
     for entity in query.iter() {
         commands.entity(entity).despawn_recursive();
     }
-}
-
-fn setup_player(
-    asset_server: Res<AssetServer>,
-    mut commands: Commands,
-    mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
-) {
-    let texture_handle = asset_server.load("sprites/keep.png");
-
-    let texture_atlas_layout = TextureAtlasLayout::from_grid(UVec2::splat(32), 1, 1, None, None);
-    let texture_atlas_layout_handle = texture_atlas_layouts.add(texture_atlas_layout);
-
-    commands.spawn(Wave).with_children(|parent| {
-        parent.spawn((
-            Player::default(),
-            Sprite::from_atlas_image(
-                texture_handle,
-                TextureAtlas {
-                    index: 0,
-                    layout: texture_atlas_layout_handle,
-                },
-            ),
-        ));
-    });
 }
 
 #[derive(Component)]
@@ -93,9 +85,7 @@ fn do_countdown(
     }
 }
 
-fn setup_countdown(asset_server: Res<AssetServer>, mut commands: Commands) {
-    let font_handle = asset_server.load("fonts/PressStart2P-Regular.ttf");
-
+fn setup_countdown(asset_handles: Res<AssetHandles>, mut commands: Commands) {
     commands
         .spawn((
             BackgroundColor(Color::BLACK),
@@ -119,59 +109,20 @@ fn setup_countdown(asset_server: Res<AssetServer>, mut commands: Commands) {
                 Text::new("3"),
                 TextColor(Color::WHITE),
                 TextFont {
-                    font: font_handle.clone(),
+                    font: asset_handles.font_map.get("default").unwrap().clone(),
                     ..default()
                 },
             ));
         });
 }
 
-fn setup_ui(asset_server: Res<AssetServer>, mut commands: Commands) {
-    let font_handle = asset_server.load("fonts/PressStart2P-Regular.ttf");
-
-    commands
-        .spawn((
-            Node {
-                align_items: AlignItems::Stretch,
-                display: Display::Flex,
-                flex_direction: FlexDirection::Column,
-                justify_content: JustifyContent::SpaceBetween,
-                height: Val::Vh(100.0),
-                width: Val::Vw(100.0),
-                ..default()
-            },
-            Wave,
-        ))
-        .with_children(|parent| {
-            parent
-                .spawn((
-                    Node {
-                        align_items: AlignItems::Center,
-                        display: Display::Flex,
-                        justify_content: JustifyContent::SpaceBetween,
-                        padding: UiRect::all(Val::Px(5.0)),
-                        ..default()
-                    },
-                    BackgroundColor(Color::BLACK),
-                ))
-                .with_children(|parent| {
-                    parent.spawn((
-                        Text::new("Wave 1"),
-                        TextColor(Color::WHITE),
-                        TextFont {
-                            font: font_handle.clone(),
-                            ..default()
-                        },
-                    ));
-                });
-        });
-}
-
-fn setup_terrain(
+fn setup_wave(
+    asset_handles: Res<AssetHandles>,
     asset_server: Res<AssetServer>,
     mut commands: Commands,
     mut global_rng: GlobalEntropy<WyRand>,
 ) {
+    // Build the arena
     let texture_handle = asset_server.load("sprites/terrain.png");
 
     let tilemap_entity = commands.spawn_empty().id();
@@ -207,7 +158,7 @@ fn setup_terrain(
         }
     }
 
-    let tile_size = TilemapTileSize { x: 16.0, y: 16.0 };
+    let tile_size = TilemapTileSize { x: TILE_SIZE, y: TILE_SIZE };
     let grid_size = tile_size.into();
     let map_type = TilemapType::Square;
 
@@ -223,22 +174,85 @@ fn setup_terrain(
         ..default()
     });
 
-    commands.spawn(Wave).add_child(tilemap_entity);
+    // Setup rest of wave
+
+    commands
+        .spawn(Wave::default())
+        .add_child(tilemap_entity)
+        .with_children(|parent| {
+            // UI
+
+            parent
+                .spawn((Node {
+                    align_items: AlignItems::Stretch,
+                    display: Display::Flex,
+                    flex_direction: FlexDirection::Column,
+                    justify_content: JustifyContent::SpaceBetween,
+                    height: Val::Vh(100.0),
+                    width: Val::Vw(100.0),
+                    ..default()
+                },))
+                .with_children(|parent| {
+                    parent
+                        .spawn((
+                            Node {
+                                align_items: AlignItems::Center,
+                                display: Display::Flex,
+                                justify_content: JustifyContent::SpaceBetween,
+                                padding: UiRect::all(Val::Px(5.0)),
+                                ..default()
+                            },
+                            BackgroundColor(Color::BLACK),
+                        ))
+                        .with_children(|parent| {
+                            parent.spawn((
+                                Text::new("Wave 1"),
+                                TextColor(Color::WHITE),
+                                TextFont {
+                                    font: asset_handles.font_map.get("default").unwrap().clone(),
+                                    ..default()
+                                },
+                            ));
+                        });
+                });
+
+            parent.spawn(Player::default());
+        });
+}
+
+fn spawn_enemies(mut commands: Commands, mut global_rng: GlobalEntropy<WyRand>, mut query: Query<(Entity, &mut Wave)>, time: Res<Time>) {
+    let Ok((wave_entity, mut wave)) = query.get_single_mut() else {
+        return;
+    };
+
+    wave.enemy_spawn_timer.tick(time.delta());
+
+    if wave.enemy_spawn_timer.just_finished() {
+        let arena_real_boundary: Vec2 = (ARENA_SIZE - (ARENA_SIZE / 2)).as_vec2() * TILE_SIZE;
+        let mut rng = global_rng.fork_rng();
+
+        let x = rng.gen_range(0.0..arena_real_boundary.x);
+        let y = rng.gen_range(0.0..arena_real_boundary.y);
+
+        let enemy_entity = commands.spawn((
+            Enemy::default(),
+            Transform::from_translation(Vec3::new(x, y, 0.0)),
+        )).id();
+
+        commands.entity(wave_entity).add_child(enemy_entity);
+    }
 }
 
 impl Plugin for WavePlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(PlayerPlugin);
-        app.add_systems(
-            OnEnter(StageState::Wave),
-            (setup_player, setup_terrain, setup_ui),
-        );
+        app.add_plugins((EnemyPlugin, PlayerPlugin));
+        app.add_systems(OnEnter(StageState::Wave), setup_wave);
         app.add_systems(OnEnter(WaveState::Preparation), setup_countdown);
         app.add_systems(OnExit(WaveState::Preparation), destroy_countdown);
         app.add_systems(OnExit(StageState::Wave), destroy_wave);
         app.add_systems(
             Update,
-            do_countdown.run_if(in_state(WaveState::Preparation)),
+            (do_countdown.run_if(in_state(WaveState::Preparation)), spawn_enemies.run_if(in_state(WaveState::Running))),
         );
 
         app.add_sub_state::<WaveState>();

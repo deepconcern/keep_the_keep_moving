@@ -3,13 +3,12 @@ use leafwing_input_manager::prelude::*;
 
 use crate::{
     action::{Action, default_input_map},
-    game::game_state::GameState,
+    asset_handles::AssetHandles,
+    game::{game_state::GameState, wave::wave_state::WaveState},
 };
 
-use super::wave_state::WaveState;
-
 const DEFAULT_DIRECTION: Vec2 = Vec2::Y;
-const DEFAULT_SPEED: f32 = 1.0;
+const DEFAULT_SPEED: f32 = 100.0;
 const TURN_RATE: f32 = 0.05;
 
 pub struct PlayerPlugin;
@@ -42,9 +41,23 @@ fn follow_player(
     }
 }
 
-fn move_player(mut query: Query<(&Player, &mut Transform)>) {
+fn initialize_player(asset_handles: Res<AssetHandles>, mut query: Query<&mut Sprite, Added<Player>>) {
+    for mut sprite in query.iter_mut() {
+        sprite.image = asset_handles.image_map.get("player").unwrap().clone();
+        sprite.texture_atlas = Some(TextureAtlas {
+            index: 0,
+            layout: asset_handles
+                .texture_atlas_layout_map
+                .get("player")
+                .unwrap()
+                .clone(),
+        });
+    }
+}
+
+fn move_player(mut query: Query<(&Player, &mut Transform)>, time: Res<Time>) {
     for (player, mut transform) in query.iter_mut() {
-        let translation = player.direction * player.speed;
+        let translation = player.direction * player.speed * time.delta_secs();
 
         transform.translation += translation.extend(0.0);
     }
@@ -82,7 +95,7 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (follow_player, move_player, steer_player)
+            (follow_player, initialize_player, move_player, steer_player)
                 .run_if(in_state(GameState::Running).and(in_state(WaveState::Running))),
         );
     }

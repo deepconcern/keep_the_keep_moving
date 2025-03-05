@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 use crate::app_state::AppState;
+use crate::asset_handles::AssetHandles;
 use crate::colors::DARK_GRAY;
 
 pub struct MenuPlugin;
@@ -62,9 +63,7 @@ fn destroy_menu(mut commands: Commands, query: Query<Entity, With<Menu>>) {
     }
 }
 
-fn setup_menu(asset_server: Res<AssetServer>, mut commands: Commands) {
-    let font_handle = asset_server.load("fonts/PressStart2P-Regular.ttf");
-
+fn setup_menu(asset_handles: Res<AssetHandles>, mut commands: Commands) {
     commands
         .spawn((
             BackgroundColor(Color::BLACK),
@@ -93,7 +92,7 @@ fn setup_menu(asset_server: Res<AssetServer>, mut commands: Commands) {
                         Text::new("Keep the Keep Moving!"),
                         TextColor(Color::WHITE),
                         TextFont {
-                            font: font_handle.clone(),
+                            font: asset_handles.font_map.get("default").unwrap().clone(),
                             ..default()
                         },
                     ));
@@ -123,7 +122,7 @@ fn setup_menu(asset_server: Res<AssetServer>, mut commands: Commands) {
                             Text::new("Start Game"),
                             TextColor(Color::WHITE),
                             TextFont {
-                                font: font_handle.clone(),
+                                font: asset_handles.font_map.get("default").unwrap().clone(),
                                 ..default()
                             },
                         ));

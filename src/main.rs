@@ -1,11 +1,14 @@
 mod action;
+mod asset_handles;
 mod app_state;
 mod colors;
 mod game;
 mod menu;
+mod simple_animations;
 
 use action::Action;
 use app_state::AppState;
+use asset_handles::AssetHandlesPlugin;
 use bevy::{asset::AssetMetaCheck, prelude::*};
 use bevy_ecs_tilemap::prelude::*;
 use bevy_prng::WyRand;
@@ -13,6 +16,7 @@ use bevy_rand::prelude::EntropyPlugin;
 use game::GamePlugin;
 use leafwing_input_manager::prelude::*;
 use menu::MenuPlugin;
+use simple_animations::SimpleAnimationsPlugin;
 
 fn setup(mut commands: Commands) {
     commands.spawn((
@@ -28,6 +32,7 @@ fn main() {
     let mut app = App::new();
 
     app.add_plugins((
+        AssetHandlesPlugin,
         DefaultPlugins.set(AssetPlugin {
             // Wasm builds will check for meta files (that don't exist) if this isn't set.
             // This causes errors and even panics in web builds on itch.
@@ -39,6 +44,7 @@ fn main() {
         GamePlugin,
         InputManagerPlugin::<Action>::default(),
         MenuPlugin,
+        SimpleAnimationsPlugin,
         TilemapPlugin,
     ));
     app.add_systems(Startup, setup);
