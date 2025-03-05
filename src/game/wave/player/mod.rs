@@ -1,4 +1,7 @@
+mod defender;
+
 use bevy::prelude::*;
+use defender::{Defender, DefenderPlugin};
 use leafwing_input_manager::prelude::*;
 
 use crate::{
@@ -30,29 +33,50 @@ impl Default for Player {
 }
 
 fn follow_player(
-    mut camera_query: Query<&mut Transform, (With<Camera>, Without<Player>)>,
-    player_query: Query<&Transform, (With<Player>, Without<Camera>)>,
+    mut camera_query: Query<&mut Transform, (With<Camera>, Without<Defender>, Without<Player>)>,
+    mut defender_query: Query<&mut Transform, (With<Defender>, Without<Camera>, Without<Player>)>,
+    player_query: Query<&Transform, (With<Player>, Without<Camera>, Without<Defender>)>,
 ) {
+    let Ok(player_transform) = player_query.get_single() else {
+        return;
+    };
+
     for mut camera_transform in camera_query.iter_mut() {
-        for player_transform in player_query.iter() {
-            camera_transform.translation.x = player_transform.translation.x;
-            camera_transform.translation.y = player_transform.translation.y;
-        }
+        camera_transform.translation.x = player_transform.translation.x;
+        camera_transform.translation.y = player_transform.translation.y;
+    }
+
+    for mut defender_transform in defender_query.iter_mut() {
+        defender_transform.translation.x = player_transform.translation.x;
+        defender_transform.translation.y = player_transform.translation.y;
     }
 }
 
-fn initialize_player(asset_handles: Res<AssetHandles>, mut query: Query<&mut Sprite, Added<Player>>) {
-    for mut sprite in query.iter_mut() {
-        sprite.image = asset_handles.image_map.get("player").unwrap().clone();
-        sprite.texture_atlas = Some(TextureAtlas {
-            index: 0,
-            layout: asset_handles
-                .texture_atlas_layout_map
-                .get("player")
-                .unwrap()
-                .clone(),
-        });
-    }
+fn initialize_player(
+    asset_handles: Res<AssetHandles>,
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut Sprite), Added<Player>>,
+) {
+    let Ok((player_entity, mut player_sprite)) = query.get_single_mut() else {
+        return;
+    };
+
+    // Set the player's sprite
+
+    player_sprite.image = asset_handles.image_map.get("player").unwrap().clone();
+    player_sprite.texture_atlas = Some(TextureAtlas {
+        index: 0,
+        layout: asset_handles
+            .texture_atlas_layout_map
+            .get("player")
+            .unwrap()
+            .clone(),
+    });
+
+    // Start the player with an archers
+    let archer_entity = commands.spawn(Defender::default()).id();
+
+    commands.entity(player_entity).add_child(archer_entity);
 }
 
 fn move_player(mut query: Query<(&Player, &mut Transform)>, time: Res<Time>) {
@@ -93,6 +117,7 @@ fn steer_player(mut query: Query<(&ActionState<Action>, &mut Player)>) {
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
+        app.add_plugins(DefenderPlugin);
         app.add_systems(
             Update,
             (follow_player, initialize_player, move_player, steer_player)

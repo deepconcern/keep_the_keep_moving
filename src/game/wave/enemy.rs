@@ -122,7 +122,7 @@ fn initialize_enemy(asset_handles: Res<AssetHandles>, mut query: Query<&mut Spri
     for mut sprite in query.iter_mut() {
         sprite.image = asset_handles.image_map.get("enemy").unwrap().clone();
         sprite.texture_atlas = Some(TextureAtlas {
-            index: 0,
+            index: 3,
             layout: asset_handles
                 .texture_atlas_layout_map
                 .get("enemy")

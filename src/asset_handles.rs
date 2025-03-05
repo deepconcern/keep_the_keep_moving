@@ -6,9 +6,10 @@ const FONTS: [(&'static str, &'static str); 1] = [
     ("default", "fonts/PressStart2P-Regular.ttf"),
 ];
 
-const TEXTURE_ATLASES: [(&'static str, &'static str, UVec2, u32, u32, Option<UVec2>, Option<UVec2>); 2] = [
-    ("enemy", "sprites/enemies.png", UVec2::splat(16), 3, 2, Some(UVec2::splat(2)), None),
+const TEXTURE_ATLASES: [(&'static str, &'static str, UVec2, u32, u32, Option<UVec2>, Option<UVec2>); 3] = [
+    ("enemy", "sprites/enemies.png", UVec2::splat(16), 3, 2, Some(UVec2::splat(1)), None),
     ("player", "sprites/keep.png", UVec2::splat(32), 1, 1, None, None),
+    ("weapon", "sprites/weapons.png", UVec2::splat(8), 2, 2, Some(UVec2::splat(1)), None),
 ];
 
 #[derive(Debug, Default, Resource)]

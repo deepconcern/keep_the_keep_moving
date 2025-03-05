@@ -42,6 +42,6 @@ pub struct SimpleAnimationsPlugin;
 
 impl Plugin for SimpleAnimationsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, animate);
+        app.add_systems(PreUpdate, animate);
     }
 }
