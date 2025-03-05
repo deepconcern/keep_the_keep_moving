@@ -8,7 +8,7 @@ use crate::{
 };
 
 const DEFAULT_DIRECTION: Vec2 = Vec2::Y;
-const DEFAULT_SPEED: f32 = 100.0;
+const DEFAULT_SPEED: f32 = 120.0;
 const TURN_RATE: f32 = 0.05;
 
 pub struct PlayerPlugin;

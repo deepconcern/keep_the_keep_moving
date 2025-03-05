@@ -5,7 +5,7 @@ use crate::simple_animations::SimpleAnimation;
 
 use super::player::Player;
 
-const DEFAULT_SPEED: f32 = 100.0;
+const DEFAULT_SPEED: f32 = 120.0;
 const DEATH_RATE: f32 = 1.0;
 const SPAWN_RATE: f32 = 1.0;
 
@@ -51,12 +51,25 @@ impl Default for Enemy {
     }
 }
 
-fn enemy_behavior(mut commands: Commands, mut enemy_query: Query<(&mut Enemy, Entity, &mut SimpleAnimation, &Transform)>, player_query: Query<(&Player, &Transform)>, time: Res<Time>) {
+fn enemy_behavior(
+    mut commands: Commands,
+    mut enemy_query: Query<(
+        &mut Enemy,
+        Entity,
+        &mut SimpleAnimation,
+        &mut Sprite,
+        &Transform,
+    )>,
+    player_query: Query<(&Player, &Transform)>,
+    time: Res<Time>,
+) {
     let Ok((player, player_transform)) = player_query.get_single() else {
         return;
     };
 
-    for (mut enemy, enemy_entity, mut enemy_animation, enemy_transform) in enemy_query.iter_mut() {
+    for (mut enemy, enemy_entity, mut enemy_animation, mut enemy_sprite, enemy_transform) in
+        enemy_query.iter_mut()
+    {
         match enemy.enemy_state {
             EnemyState::Spawning => {
                 enemy.direction = Vec2::ZERO;
@@ -64,17 +77,21 @@ fn enemy_behavior(mut commands: Commands, mut enemy_query: Query<(&mut Enemy, En
 
                 if (enemy.spawn_timer.just_finished()) {
                     enemy.enemy_state = EnemyState::Active;
+                    enemy_animation.animation_timer.reset();
+                    enemy_animation.current_frame_index = 0;
+                    enemy_animation.frames = vec![0, 1];
                 }
             }
             EnemyState::Active => {
                 match enemy.enemy_type {
                     EnemyType::Normal => {
-                        enemy_animation.animation_timer.reset();
-                        enemy_animation.current_frame_index = 0;
-                        enemy_animation.frames = vec![0, 1];
-                        enemy.direction = (player_transform.translation - enemy_transform.translation).truncate();
+                        enemy.direction =
+                            (player_transform.translation - enemy_transform.translation).truncate();
+
                         enemy.direction = enemy.direction.normalize();
-                    },
+
+                        enemy_sprite.flip_x = enemy.direction.x < 0.0;
+                    }
                 };
             }
             EnemyState::Dead => {
@@ -82,8 +99,6 @@ fn enemy_behavior(mut commands: Commands, mut enemy_query: Query<(&mut Enemy, En
                 enemy.death_timer.tick(time.delta());
 
                 if (enemy.death_timer.just_finished()) {
-                    enemy_animation.current_frame_index = 0;
-                    enemy_animation.frames = vec![2];
                     commands.entity(enemy_entity).despawn();
                 }
             }
