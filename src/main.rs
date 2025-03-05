@@ -1,6 +1,7 @@
 mod action;
 mod asset_handles;
 mod app_state;
+mod collision;
 mod colors;
 mod game;
 mod menu;
@@ -13,6 +14,7 @@ use bevy::{asset::AssetMetaCheck, prelude::*, render::camera::ScalingMode};
 use bevy_ecs_tilemap::prelude::*;
 use bevy_prng::WyRand;
 use bevy_rand::prelude::EntropyPlugin;
+use collision::CollisionPlugin;
 use game::GamePlugin;
 use leafwing_input_manager::prelude::*;
 use menu::MenuPlugin;
@@ -36,6 +38,7 @@ fn main() {
 
     app.add_plugins((
         AssetHandlesPlugin,
+        CollisionPlugin,
         DefaultPlugins.set(AssetPlugin {
             // Wasm builds will check for meta files (that don't exist) if this isn't set.
             // This causes errors and even panics in web builds on itch.
@@ -44,7 +47,9 @@ fn main() {
             ..default()
         }).set(ImagePlugin::default_nearest()).set(WindowPlugin {
             primary_window: Some (Window {
-                resizable: true,
+                canvas: Some("#bevy".to_string()),
+                fit_canvas_to_parent: true,
+                prevent_default_event_handling: true,
                 title: "Keep the Keep Moving!".to_string(),
                 ..default()
             }),

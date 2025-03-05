@@ -126,6 +126,7 @@ fn weapon_movement(mut query: Query<(&mut Transform, &Weapon)>, time: Res<Time>)
         let translation = weapon.direction * weapon.speed * time.delta_secs();
 
         transform.translation += translation.extend(0.0);
+        transform.rotation = Quat::from_rotation_arc(Vec3::Y, weapon.direction.extend(0.0));
     }
 }
 
