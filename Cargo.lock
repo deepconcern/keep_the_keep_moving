@@ -2590,7 +2590,7 @@ dependencies = [
 
 [[package]]
 name = "keep_the_keep_moving"
-version = "0.1.5"
+version = "0.6.1"
 dependencies = [
  "bevy",
  "bevy_ecs_tilemap",
