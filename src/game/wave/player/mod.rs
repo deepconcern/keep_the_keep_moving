@@ -5,28 +5,40 @@ use defender::{Defender, DefenderPlugin};
 use leafwing_input_manager::prelude::*;
 
 use crate::{
-    action::{Action, default_input_map},
+    action::{default_input_map, Action},
     asset_handles::AssetHandles,
-    game::{game_state::GameState, wave::wave_state::WaveState},
+    game::{game_state::GameState, wave::wave_state::WaveState}, health::Health,
 };
 
 const DEFAULT_DIRECTION: Vec2 = Vec2::Y;
 const DEFAULT_SPEED: f32 = 120.0;
-const TURN_RATE: f32 = 0.05;
+const INVINCIBILITY_RATE: f32 = 0.25;
+pub const PLAYER_SIZE: f32 = 16.0;
+const TURN_RATE: f32 = 0.03;
 
 pub struct PlayerPlugin;
 
+#[derive(Eq, PartialEq)]
+pub enum PlayerState {
+    Invincible,
+    Normal,
+}
+
 #[derive(Component)]
-#[require(ActionState<Action>, InputMap::<Action>(default_input_map),  Sprite, Transform, Visibility)]
+#[require(ActionState<Action>, Health(|| 10), InputMap::<Action>(default_input_map),  Sprite, Transform, Visibility)]
 pub struct Player {
-    direction: Vec2,
-    speed: f32,
+    pub direction: Vec2,
+    pub invincibility_timer: Timer,
+    pub player_state: PlayerState,
+    pub speed: f32,
 }
 
 impl Default for Player {
     fn default() -> Self {
         Self {
             direction: DEFAULT_DIRECTION,
+            invincibility_timer: Timer::from_seconds(INVINCIBILITY_RATE, TimerMode::Once),
+            player_state: PlayerState::Normal,
             speed: DEFAULT_SPEED,
         }
     }
@@ -87,6 +99,22 @@ fn move_player(mut query: Query<(&Player, &mut Transform)>, time: Res<Time>) {
     }
 }
 
+fn player_invincibility(mut query: Query<&mut Player>, time: Res<Time>) {
+    let Ok(mut player) = query.get_single_mut() else {
+        return;
+    };
+
+    if player.player_state != PlayerState::Invincible {
+        return;
+    }
+
+    player.invincibility_timer.tick(time.delta());
+
+    if player.invincibility_timer.just_finished() {
+        player.player_state = PlayerState::Normal;
+    }
+}
+
 fn steer_player(mut query: Query<(&ActionState<Action>, &mut Player)>) {
     for (action_state, mut player) in query.iter_mut() {
         let mut target_direction = Vec2::ZERO;
@@ -120,7 +148,7 @@ impl Plugin for PlayerPlugin {
         app.add_plugins(DefenderPlugin);
         app.add_systems(
             Update,
-            (follow_player, initialize_player, move_player, steer_player)
+            (follow_player, initialize_player, move_player, player_invincibility, steer_player)
                 .run_if(in_state(GameState::Running).and(in_state(WaveState::Running))),
         );
     }

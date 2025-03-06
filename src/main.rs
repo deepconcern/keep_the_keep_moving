@@ -4,6 +4,7 @@ mod app_state;
 mod collision;
 mod colors;
 mod game;
+mod health;
 mod menu;
 mod simple_animations;
 
