@@ -5,12 +5,12 @@ mod wave_state;
 
 use std::time::Duration;
 
-use bevy::prelude::*;
+use bevy::{math::{bounding::*, VectorSpace}, prelude::*};
 use bevy_ecs_tilemap::prelude::*;
 use bevy_prng::WyRand;
 use bevy_rand::prelude::*;
 use enemy::{Enemy, EnemyPlugin};
-use player::{Player, PlayerPlugin};
+use player::{Player, PlayerPlugin, PlayerState};
 use rand::{Rng, seq::IteratorRandom};
 use wave_sets::WaveRunningSet;
 use wave_state::WaveState;
@@ -21,13 +21,22 @@ use super::{game_controller::GameController, game_state::GameState};
 
 const AREA_SIZE: UVec2 = UVec2::new(128, 64);
 const ARENA_SIZE: UVec2 = UVec2::new(48, 24);
-const ARENA_BOUNDRY_OFFSET: u32 = 7;
+const ARENA_BOUNDARY_OFFSET: u32 = 7;
 const ENEMY_SPAWN_INTERVAL: f32 = 5.0;
 const TILE_SIZE: f32 = 16.0;
 const TRANSITION_RATE: f32 = 3.0;
 const WAVE_RATE: f32 = 15.0;
 
-pub struct WavePlugin;
+#[derive(Component)]
+struct FinishedMessage;
+
+#[derive(Component)]
+struct GameOverMessage;
+
+#[derive(Component)]
+struct HealthUi;
+#[derive(Component)]
+struct PreparationMessage(u32);
 
 #[derive(Component)]
 #[require(Transform, Visibility)]
@@ -52,17 +61,6 @@ impl Default for WaveController {
 }
 
 #[derive(Component)]
-struct FinishedMessage;
-
-#[derive(Component)]
-struct GameOverMessage;
-
-#[derive(Component)]
-struct HealthUi;
-#[derive(Component)]
-struct PreparationMessage(u32);
-
-#[derive(Component)]
 struct WaveTilemap;
 
 #[derive(Component)]
@@ -70,6 +68,39 @@ struct WaveTimerUi;
 
 #[derive(Component)]
 struct WaveUi;
+
+#[derive(Resource)]
+struct Arena {
+    arena: URect,
+    arena_volume: Aabb2d,
+    total_area: URect,
+}
+
+impl Default for Arena {
+    fn default() -> Self {
+        let total_area = URect::from_corners(UVec2::ZERO, AREA_SIZE);
+
+        let arena = URect::from_center_size(total_area.center(), ARENA_SIZE);
+        Self {
+            arena,
+            arena_volume: Aabb2d::new(Vec2::ZERO, arena.max.as_vec2() / 2.0),
+            total_area,
+        }
+    }
+}
+
+fn boundary_collision(arena: Res<Arena>, mut query: Query<(&mut Player, &Transform)>) {
+    let Ok((mut player, transform)) = query.get_single_mut() else {
+        return;
+    };
+
+    let player_volume = player.volume(transform);
+
+    if !player_volume.intersects(&arena.arena_volume) {
+        println!("DEAD");
+        player.player_state = PlayerState::Dead;
+    }
+}
 
 fn destroy_finished(mut commands: Commands, query: Query<Entity, With<FinishedMessage>>) {
     for entity in query.iter() {
@@ -223,6 +254,7 @@ fn setup_game_over(asset_handles: Res<AssetHandles>, mut commands: Commands) {
 }
 
 fn setup_wave(
+    arena: Res<Arena>,
     asset_handles: Res<AssetHandles>,
     asset_server: Res<AssetServer>,
     mut query: Query<&mut Transform, With<Camera>>,
@@ -251,29 +283,30 @@ fn setup_wave(
 
     let mut rng = global_rng.fork_rng();
 
-    let arena_start = (AREA_SIZE - ARENA_SIZE) / 2;
-    let arena_end = arena_start + ARENA_SIZE;
-
     let mut tile_texture_index = |x, y| {
-        if x == arena_start.x {
-            if y == arena_start.y {
+        let point = UVec2::new(x, y);
+
+        if !arena.arena.contains(point) { return TileTextureIndex(10); }
+
+        if x == arena.arena.min.x {
+            if y == arena.arena.min.y {
                 TileTextureIndex(12)
-            } else if y == arena_end.y - 1 {
+            } else if y == arena.arena.max.y - 1 {
                 TileTextureIndex(0)
             } else {
                 TileTextureIndex(*[4, 8].iter().choose(&mut rng).unwrap())
             }
-        } else if x == arena_end.x - 1 {
-            if y == arena_start.y {
+        } else if x == arena.arena.max.x - 1 {
+            if y == arena.arena.min.y {
                 TileTextureIndex(15)
-            } else if y == arena_end.y - 1 {
+            } else if y == arena.arena.max.y - 1 {
                 TileTextureIndex(3)
             } else {
                 TileTextureIndex(*[7, 11].iter().choose(&mut rng).unwrap())
             }
-        } else if y == arena_start.y {
+        } else if y == arena.arena.min.y {
             TileTextureIndex(*[13, 14].iter().choose(&mut rng).unwrap())
-        } else if y == arena_end.y - 1 {
+        } else if y == arena.arena.max.y - 1 {
             TileTextureIndex(*[1, 2].iter().choose(&mut rng).unwrap())
         } else {
             TileTextureIndex(*[5, 6, 9].iter().choose(&mut rng).unwrap())
@@ -502,8 +535,11 @@ fn wave_timer_ui(
     );
 }
 
+pub struct WavePlugin;
+
 impl Plugin for WavePlugin {
     fn build(&self, app: &mut App) {
+
         app.add_plugins((EnemyPlugin, PlayerPlugin));
         app.add_sub_state::<WaveState>();
         app.add_systems(OnEnter(GameState::Wave), setup_wave);
@@ -519,11 +555,13 @@ impl Plugin for WavePlugin {
             (
                 (health_ui, wave_timer_tick, wave_timer_ui),
                 prepare.run_if(in_state(WaveState::Preparation)),
-                (spawn_enemies).run_if(in_state(WaveState::Running)),
-            )
-                .run_if(in_state(GameState::Wave)),
+            ).run_if(in_state(GameState::Wave)),
         );
 
+        (boundary_collision, spawn_enemies).in_set(WaveRunningSet);
+
         app.configure_sets(Update, WaveRunningSet.run_if(in_state(WaveState::Running)));
+
+        app.init_resource::<Arena>();
     }
 }

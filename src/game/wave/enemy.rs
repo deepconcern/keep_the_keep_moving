@@ -4,7 +4,7 @@ use crate::{asset_handles::AssetHandles, game::game_sets::PausableSet};
 use crate::health::Health;
 use crate::simple_animations::SimpleAnimation;
 
-use super::player::{PLAYER_SIZE, Player, PlayerState};
+use super::player::{Player, PlayerState};
 use super::wave_sets::WaveRunningSet;
 use super::wave_state::WaveState;
 
@@ -188,7 +188,7 @@ fn player_hit(
         return;
     }
 
-    let player_volume = BoundingCircle::new(player_transform.translation.xy(), PLAYER_SIZE);
+    let player_volume = player.volume(player_transform);
 
     for (enemy, enemy_transform) in enemy_query.iter() {
         if !enemy.volume(enemy_transform).intersects(&player_volume) {

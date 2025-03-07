@@ -1,6 +1,6 @@
 mod defender;
 
-use bevy::prelude::*;
+use bevy::{math::bounding::*, prelude::*};
 use defender::{Defender, DefenderPlugin};
 use leafwing_input_manager::prelude::*;
 
@@ -17,7 +17,7 @@ const DEATH_RATE: f32 = 1.0;
 const DEFAULT_DIRECTION: Vec2 = Vec2::Y;
 const DEFAULT_SPEED: f32 = 120.0;
 const INVINCIBILITY_RATE: f32 = 0.25;
-pub const PLAYER_SIZE: f32 = 16.0;
+const PLAYER_SIZE: f32 = 16.0;
 const TURN_RATE: f32 = 0.03;
 
 pub struct PlayerPlugin;
@@ -48,6 +48,12 @@ impl Default for Player {
             player_state: PlayerState::Normal,
             speed: DEFAULT_SPEED,
         }
+    }
+}
+
+impl Player {
+    pub fn volume(&self, transform: &Transform) -> BoundingCircle {
+        BoundingCircle::new(transform.translation.xy(), PLAYER_SIZE)
     }
 }
 
