@@ -80,7 +80,9 @@ fn defender_action(mut commands: Commands, enemy_query: Query<(&Enemy, Entity, &
     }
 }
 
+#[derive(Default)]
 pub enum WeaponType {
+    #[default]
     Arrow,
 }
 
@@ -92,6 +94,7 @@ pub struct Weapon {
     direction: Vec2,
     speed: f32,
     target: Option<Entity>,
+    weapon_type: WeaponType,
 }
 
 impl Default for Weapon {
@@ -102,15 +105,18 @@ impl Default for Weapon {
             direction: Vec2::ZERO,
             speed: DEFAULT_ARROW_SPEED,
             target: None,
+            weapon_type: WeaponType::default(),
         }
     }
 }
 
-fn initialize_weapon(asset_handles: Res<AssetHandles>, mut query: Query<&mut Sprite, Added<Weapon>>) {
-    for mut sprite in query.iter_mut() {
+fn initialize_weapon(asset_handles: Res<AssetHandles>, mut query: Query<(&mut Sprite, &Weapon), Added<Weapon>>) {
+    for (mut sprite, weapon) in query.iter_mut() {
         sprite.image = asset_handles.image_map.get("weapon").unwrap().clone();
         sprite.texture_atlas = Some(TextureAtlas {
-            index: 0,
+            index: match weapon.weapon_type {
+                WeaponType::Arrow => 0,
+            },
             layout: asset_handles
                 .texture_atlas_layout_map
                 .get("weapon")

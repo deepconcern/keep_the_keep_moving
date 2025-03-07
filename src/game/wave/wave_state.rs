@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 
-use super::super::stage_state::StageState;
+use super::super::game_state::GameState;
 
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq, SubStates)]
-#[source(StageState = StageState::Wave)]
+#[source(GameState = GameState::Wave)]
 pub enum WaveState {
     Complete,
     GameOver,

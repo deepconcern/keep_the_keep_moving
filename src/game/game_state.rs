@@ -2,10 +2,15 @@ use bevy::prelude::*;
 
 use crate::app_state::AppState;
 
-#[derive(Debug, Default, Clone, Eq, Hash, PartialEq, SubStates)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq, SubStates)]
 #[source(AppState = AppState::Game)]
 pub enum GameState {
-    Paused,
-    #[default]
-    Running,
+    Shop,
+    Wave,
+}
+
+impl Default for GameState {
+    fn default() -> Self {
+        GameState::Wave
+    }
 }

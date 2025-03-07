@@ -1,39 +1,30 @@
+mod game_controller;
+mod game_sets;
 mod game_state;
 mod pause_menu;
+mod pause_state;
 mod shop;
-mod stage_state;
 mod wave;
 
 use bevy::prelude::*;
+use game_controller::GameController;
+use game_sets::PausableSet;
 use game_state::GameState;
+use pause_state::PauseState;
 use shop::ShopPlugin;
-use stage_state::StageState;
 use wave::WavePlugin;
 
-use crate::app_state::AppState;
-
-#[derive(Component)]
-struct Game;
-
 pub struct GamePlugin;
-
-fn destroy_game(mut commands: Commands, query: Query<Entity, With<Game>>) {
-    for entity in query.iter() {
-        commands.entity(entity).despawn_recursive();
-    }
-}
-
-fn setup_game(mut commands: Commands) {
-    commands.spawn((Game, Transform::default(), Visibility::default()));
-}
 
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((ShopPlugin, WavePlugin));
-        app.add_systems(OnEnter(AppState::Game), setup_game);
-        app.add_systems(OnExit(AppState::Game), destroy_game);
 
         app.add_sub_state::<GameState>();
-        app.add_sub_state::<StageState>();
+        app.add_sub_state::<PauseState>();
+
+        app.configure_sets(Update, PausableSet.run_if(in_state(PauseState::Running)));
+
+        app.init_resource::<GameController>();
     }
 }

@@ -4,8 +4,8 @@ use crate::app_state::AppState;
 
 #[derive(Debug, Default, Clone, Eq, Hash, PartialEq, SubStates)]
 #[source(AppState = AppState::Game)]
-pub enum StageState {
-    Shop,
+pub enum PauseState {
+    Paused,
     #[default]
-    Wave,
+    Running,
 }
