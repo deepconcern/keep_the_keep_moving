@@ -241,8 +241,10 @@ fn setup_wave(
     commands.insert_resource(WaveController::from_level(game_controller.wave_level));
 
     // Start music
+    #[cfg(not(target_family = "wasm"))]
     let bgm_handle = asset_server.load("sounds/bgm.wav");
 
+    #[cfg(not(target_family = "wasm"))]
     commands.spawn((
         AudioPlayer::new(bgm_handle),
         PlaybackSettings {
@@ -425,7 +427,7 @@ fn spawn_enemies(
     if wave_controller.enemy_spawn_timer.just_finished() {
         let arena_real_boundary: Vec2 = (ARENA_SIZE - (ARENA_SIZE / 2)).as_vec2() * TILE_SIZE;
         let mut rng = global_rng.fork_rng();
-        
+
         for _ in 0..wave_controller.enemy_spawn_amount {
 
             let x = rng.gen_range(0.0..arena_real_boundary.x);
