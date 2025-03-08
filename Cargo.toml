@@ -23,10 +23,13 @@ tracing = { version = "0.1", features = [
 ] }
 
 [features]
+core = [
+    # Required features for release build
+    "bevy/wav"
+]
 default = [
     # Default to a native dev build.
-    "core",
-    "dev_native",
+    "bevy/wav"
 ]
 dev = [
     # Improve compile times for dev builds by linking Bevy as a dynamic library.
@@ -40,13 +43,8 @@ dev_native = [
     # Enable embedded asset hot reloading for native dev builds.
     "bevy/embedded_watcher",
 ]
-core = [
-    # Required features for release build
-    "bevy/wav"
-]
 linux = [
     "bevy/wayland",
-    "core"
 ]
 
 # Idiomatic Bevy code often triggers these lints, and the CI workflow treats them as errors.
