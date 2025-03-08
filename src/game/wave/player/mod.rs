@@ -5,10 +5,10 @@ use defender::{Defender, DefenderPlugin};
 use leafwing_input_manager::prelude::*;
 
 use crate::{
-    action::{Action, default_input_map},
+    action::{default_input_map, Action},
     asset_handles::AssetHandles,
     game::{game_sets::PausableSet, wave::wave_state::WaveState},
-    health::Health,
+    health::Health, simple_animations::SimpleAnimation,
 };
 
 use super::wave_sets::WaveRunningSet;
@@ -17,7 +17,7 @@ const DEATH_RATE: f32 = 1.0;
 const DEFAULT_DIRECTION: Vec2 = Vec2::Y;
 const DEFAULT_SPEED: f32 = 120.0;
 const INVINCIBILITY_RATE: f32 = 0.25;
-const PLAYER_SIZE: f32 = 16.0;
+pub const PLAYER_SIZE: f32 = 16.0;
 const TURN_RATE: f32 = 0.03;
 
 pub struct PlayerPlugin;
@@ -30,7 +30,7 @@ pub enum PlayerState {
 }
 
 #[derive(Component)]
-#[require(ActionState<Action>, Health(|| 10), InputMap::<Action>(default_input_map),  Sprite, Transform, Visibility)]
+#[require(ActionState<Action>, Health(|| 10), InputMap::<Action>(default_input_map), SimpleAnimation,  Sprite, Transform, Visibility)]
 pub struct Player {
     pub death_timer: Timer,
     pub direction: Vec2,
@@ -88,14 +88,14 @@ fn follow_player(
 fn initialize_player(
     asset_handles: Res<AssetHandles>,
     mut commands: Commands,
-    mut query: Query<(Entity, &mut Sprite), Added<Player>>,
+    mut query: Query<(Entity, &mut SimpleAnimation, &mut Sprite), Added<Player>>,
 ) {
-    let Ok((player_entity, mut player_sprite)) = query.get_single_mut() else {
+    let Ok((player_entity, mut player_animation, mut player_sprite)) = query.get_single_mut() else {
         return;
     };
 
     // Set the player's sprite
-
+    player_animation.frames = vec![0, 1, 0, 2];
     player_sprite.image = asset_handles.image_map.get("player").unwrap().clone();
     player_sprite.texture_atlas = Some(TextureAtlas {
         index: 0,
@@ -128,16 +128,19 @@ fn move_player(mut query: Query<(&Player, &mut Transform)>, time: Res<Time>) {
 
 fn player_death(
     mut next_state: ResMut<NextState<WaveState>>,
-    mut query: Query<&mut Player>,
+    mut query: Query<(&mut Player, &mut SimpleAnimation)>,
     time: Res<Time>,
 ) {
-    let Ok(mut player) = query.get_single_mut() else {
+    let Ok((mut player, mut player_animation)) = query.get_single_mut() else {
         return;
     };
 
     if player.player_state != PlayerState::Dead {
         return;
     }
+
+    player_animation.current_frame_index = 0;
+    player_animation.frames = vec![3];
 
     if player.death_timer.finished() {
         return;

@@ -1,6 +1,6 @@
 [package]
 name = "keep_the_keep_moving"
-version = "0.8.0"
+version = "0.9.0"
 edition = "2024"
 
 [dependencies]
@@ -25,6 +25,7 @@ tracing = { version = "0.1", features = [
 [features]
 default = [
     # Default to a native dev build.
+    "core",
     "dev_native",
 ]
 dev = [
@@ -38,6 +39,14 @@ dev_native = [
     "bevy/file_watcher",
     # Enable embedded asset hot reloading for native dev builds.
     "bevy/embedded_watcher",
+]
+core = [
+    # Required features for release build
+    "bevy/wav"
+]
+linux = [
+    "bevy/wayland",
+    "core"
 ]
 
 # Idiomatic Bevy code often triggers these lints, and the CI workflow treats them as errors.

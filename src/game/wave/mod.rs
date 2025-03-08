@@ -1,31 +1,28 @@
 mod enemy;
 mod player;
+mod wave_controller;
 mod wave_sets;
 mod wave_state;
 
-use std::time::Duration;
-
-use bevy::{math::{bounding::*, VectorSpace}, prelude::*};
+use bevy::{audio::*, math::bounding::*, prelude::*};
 use bevy_ecs_tilemap::prelude::*;
 use bevy_prng::WyRand;
 use bevy_rand::prelude::*;
 use enemy::{Enemy, EnemyPlugin};
-use player::{Player, PlayerPlugin, PlayerState};
+use player::{Player, PlayerPlugin, PlayerState, PLAYER_SIZE};
 use rand::{Rng, seq::IteratorRandom};
+use wave_controller::{wave_timer_tick, WaveController};
 use wave_sets::WaveRunningSet;
 use wave_state::WaveState;
 
-use crate::{app_state::AppState, asset_handles::AssetHandles, health::Health};
+use crate::{asset_handles::AssetHandles, health::Health};
 
 use super::{game_controller::GameController, game_state::GameState};
 
 const AREA_SIZE: UVec2 = UVec2::new(128, 64);
 const ARENA_SIZE: UVec2 = UVec2::new(48, 24);
 const ARENA_BOUNDARY_OFFSET: u32 = 7;
-const ENEMY_SPAWN_INTERVAL: f32 = 5.0;
 const TILE_SIZE: f32 = 16.0;
-const TRANSITION_RATE: f32 = 3.0;
-const WAVE_RATE: f32 = 15.0;
 
 #[derive(Component)]
 struct FinishedMessage;
@@ -36,29 +33,7 @@ struct GameOverMessage;
 #[derive(Component)]
 struct HealthUi;
 #[derive(Component)]
-struct PreparationMessage(u32);
-
-#[derive(Component)]
-#[require(Transform, Visibility)]
-struct WaveController {
-    enemy_spawn_timer: Timer,
-    finish_timer: Timer,
-    game_over_timer: Timer,
-    preparation_timer: Timer,
-    wave_timer: Timer,
-}
-
-impl Default for WaveController {
-    fn default() -> Self {
-        Self {
-            enemy_spawn_timer: Timer::from_seconds(ENEMY_SPAWN_INTERVAL, TimerMode::Repeating),
-            finish_timer: Timer::from_seconds(TRANSITION_RATE, TimerMode::Once),
-            game_over_timer: Timer::from_seconds(TRANSITION_RATE, TimerMode::Once),
-            preparation_timer: Timer::from_seconds(1.0, TimerMode::Once),
-            wave_timer: Timer::from_seconds(WAVE_RATE, TimerMode::Once),
-        }
-    }
-}
+struct PreparationMessage;
 
 #[derive(Component)]
 struct WaveTilemap;
@@ -71,20 +46,19 @@ struct WaveUi;
 
 #[derive(Resource)]
 struct Arena {
-    arena: URect,
-    arena_volume: Aabb2d,
-    total_area: URect,
+    area: URect,
+    playable_area: Aabb2d,
 }
 
 impl Default for Arena {
     fn default() -> Self {
         let total_area = URect::from_corners(UVec2::ZERO, AREA_SIZE);
 
-        let arena = URect::from_center_size(total_area.center(), ARENA_SIZE);
+        let area = URect::from_center_size(total_area.center(), ARENA_SIZE);
+
         Self {
-            arena,
-            arena_volume: Aabb2d::new(Vec2::ZERO, arena.max.as_vec2() / 2.0),
-            total_area,
+            area,
+            playable_area: Aabb2d::new(Vec2::ZERO, (area.half_size().as_vec2() * TILE_SIZE) - (PLAYER_SIZE * 1.4)),
         }
     }
 }
@@ -94,10 +68,7 @@ fn boundary_collision(arena: Res<Arena>, mut query: Query<(&mut Player, &Transfo
         return;
     };
 
-    let player_volume = player.volume(transform);
-
-    if !player_volume.intersects(&arena.arena_volume) {
-        println!("DEAD");
+    if !arena.playable_area.intersects(&player.volume(transform)) {
         player.player_state = PlayerState::Dead;
     }
 }
@@ -121,23 +92,28 @@ fn destroy_preparation(mut commands: Commands, query: Query<Entity, With<Prepara
 }
 
 fn destroy_wave(
+    audio_query: Query<Entity, With<AudioPlayer>>,
     mut commands: Commands,
-    wave_query: Query<Entity, With<WaveController>>,
     wave_ui_query: Query<Entity, With<WaveUi>>,
 ) {
-    for entity in wave_query.iter() {
+    // Wave controller
+    commands.remove_resource::<WaveController>();
+
+    for entity in audio_query.iter() {
         commands.entity(entity).despawn_recursive();
     }
+
     for entity in wave_ui_query.iter() {
         commands.entity(entity).despawn_recursive();
     }
 }
 
 fn prepare(
-    mut preparation_message_query: Query<(&Children, &PreparationMessage)>,
+    mut preparation_message_query: Query<&Children, With<PreparationMessage>>,
     mut text_query: Query<&mut Text>,
+    wave_controller: Res<WaveController>,
 ) {
-    let Ok((children, preparation_message)) = preparation_message_query.get_single_mut() else {
+    let Ok(children) = preparation_message_query.get_single_mut() else {
         return;
     };
 
@@ -146,10 +122,10 @@ fn prepare(
             continue;
         };
 
-        text.0 = if preparation_message.0 == 0 {
+        text.0 = if wave_controller.preparation_state == 0 {
             "Go!".to_string()
         } else {
-            preparation_message.0.to_string()
+            wave_controller.preparation_state.to_string()
         };
     }
 }
@@ -183,7 +159,7 @@ fn setup_preparation(asset_handles: Res<AssetHandles>, mut commands: Commands) {
                 top: Val::Percent(50.0),
                 ..default()
             },
-            PreparationMessage(3),
+            PreparationMessage,
         ))
         .with_children(|parent| {
             parent.spawn((
@@ -257,20 +233,30 @@ fn setup_wave(
     arena: Res<Arena>,
     asset_handles: Res<AssetHandles>,
     asset_server: Res<AssetServer>,
-    mut query: Query<&mut Transform, With<Camera>>,
     mut commands: Commands,
     game_controller: Res<GameController>,
     mut global_rng: GlobalEntropy<WyRand>,
+    mut query: Query<&mut Transform, With<Camera>>,
 ) {
+    commands.insert_resource(WaveController::from_level(game_controller.wave_level));
+
+    // Start music
+    let bgm_handle = asset_server.load("sounds/bgm.wav");
+
+    commands.spawn((
+        AudioPlayer::new(bgm_handle),
+        PlaybackSettings {
+            mode: PlaybackMode::Loop,
+            ..default()
+        },
+    ));
+
     // Reset camera position
     let Ok(mut camera_transform) = query.get_single_mut() else {
         return;
     };
 
     camera_transform.translation = Vec3::ZERO;
-
-    // Wave controller
-    commands.spawn(WaveController::default());
 
     // Build the arena
     let texture_handle = asset_server.load("sprites/terrain.png");
@@ -286,27 +272,27 @@ fn setup_wave(
     let mut tile_texture_index = |x, y| {
         let point = UVec2::new(x, y);
 
-        if !arena.arena.contains(point) { return TileTextureIndex(10); }
+        if !arena.area.contains(point) { return TileTextureIndex(10); }
 
-        if x == arena.arena.min.x {
-            if y == arena.arena.min.y {
+        if x == arena.area.min.x {
+            if y == arena.area.min.y {
                 TileTextureIndex(12)
-            } else if y == arena.arena.max.y - 1 {
+            } else if y == arena.area.max.y {
                 TileTextureIndex(0)
             } else {
                 TileTextureIndex(*[4, 8].iter().choose(&mut rng).unwrap())
             }
-        } else if x == arena.arena.max.x - 1 {
-            if y == arena.arena.min.y {
+        } else if x == arena.area.max.x {
+            if y == arena.area.min.y {
                 TileTextureIndex(15)
-            } else if y == arena.arena.max.y - 1 {
+            } else if y == arena.area.max.y {
                 TileTextureIndex(3)
             } else {
                 TileTextureIndex(*[7, 11].iter().choose(&mut rng).unwrap())
             }
-        } else if y == arena.arena.min.y {
+        } else if y == arena.area.min.y {
             TileTextureIndex(*[13, 14].iter().choose(&mut rng).unwrap())
-        } else if y == arena.arena.max.y - 1 {
+        } else if y == arena.area.max.y {
             TileTextureIndex(*[1, 2].iter().choose(&mut rng).unwrap())
         } else {
             TileTextureIndex(*[5, 6, 9].iter().choose(&mut rng).unwrap())
@@ -380,7 +366,7 @@ fn setup_wave(
                 ))
                 .with_children(|parent| {
                     parent.spawn((
-                        Text::new(format!("Wave {}", game_controller.wave + 1)),
+                        Text::new(format!("Wave {}", game_controller.wave_level + 1)),
                         TextColor(Color::WHITE),
                         TextFont {
                             font: asset_handles.font_map.get("default").unwrap().clone(),
@@ -430,101 +416,35 @@ fn setup_wave(
 fn spawn_enemies(
     mut commands: Commands,
     mut global_rng: GlobalEntropy<WyRand>,
-    mut query: Query<(Entity, &mut WaveController)>,
     time: Res<Time>,
+    mut wave_controller: ResMut<WaveController>,
 ) {
-    let Ok((wave_entity, mut wave)) = query.get_single_mut() else {
-        return;
-    };
 
-    wave.enemy_spawn_timer.tick(time.delta());
+    wave_controller.enemy_spawn_timer.tick(time.delta());
 
-    if wave.enemy_spawn_timer.just_finished() {
+    if wave_controller.enemy_spawn_timer.just_finished() {
         let arena_real_boundary: Vec2 = (ARENA_SIZE - (ARENA_SIZE / 2)).as_vec2() * TILE_SIZE;
         let mut rng = global_rng.fork_rng();
+        
+        for _ in 0..wave_controller.enemy_spawn_amount {
 
-        let x = rng.gen_range(0.0..arena_real_boundary.x);
-        let y = rng.gen_range(0.0..arena_real_boundary.y);
+            let x = rng.gen_range(0.0..arena_real_boundary.x);
+            let y = rng.gen_range(0.0..arena_real_boundary.y);
 
-        let enemy_entity = commands
-            .spawn((
-                Enemy::default(),
-                Transform::from_translation(Vec3::new(x, y, 0.0)),
-            ))
-            .id();
-
-        commands.entity(wave_entity).add_child(enemy_entity);
-    }
-}
-
-fn wave_timer_tick(
-    mut next_app_state: ResMut<NextState<AppState>>,
-    mut next_stage_state: ResMut<NextState<GameState>>,
-    mut next_wave_state: ResMut<NextState<WaveState>>,
-    mut preparation_message_query: Query<&mut PreparationMessage>,
-    time: Res<Time>,
-    mut wave_controller_query: Query<&mut WaveController>,
-    wave_state: Res<State<WaveState>>,
-) {
-    let Ok(mut wave_controller) = wave_controller_query.get_single_mut() else {
-        return;
-    };
-
-    match wave_state.get() {
-        WaveState::Complete => {
-            wave_controller.finish_timer.tick(time.delta());
-
-            if wave_controller.finish_timer.just_finished() {
-                next_stage_state.set(GameState::Shop);
-            }
-        }
-        WaveState::GameOver => {
-            wave_controller.game_over_timer.tick(time.delta());
-
-            if wave_controller.game_over_timer.just_finished() {
-                next_app_state.set(AppState::Menu);
-            }
-        }
-        WaveState::Preparation => {
-            wave_controller.preparation_timer.tick(time.delta());
-
-            if wave_controller.preparation_timer.just_finished() {
-                let Ok(mut preparation_message) = preparation_message_query.get_single_mut() else {
-                    return;
-                };
-
-                if preparation_message.0 > 0 {
-                    preparation_message.0 -= 1;
-                    wave_controller.preparation_timer.reset();
-                } else {
-                    next_wave_state.set(WaveState::Running);
-                    wave_controller.wave_timer.reset();
-                    wave_controller
-                        .wave_timer
-                        .set_duration(Duration::from_secs(WAVE_RATE as u64));
-                }
-            }
-        }
-        WaveState::Running => {
-            wave_controller.wave_timer.tick(time.delta());
-
-            if wave_controller.wave_timer.just_finished() {
-                next_wave_state.set(WaveState::Complete);
-                wave_controller.finish_timer.reset();
-            }
+            commands
+                .spawn((
+                    Enemy::default(),
+                    Transform::from_translation(Vec3::new(x, y, 0.0)),
+                ));
         }
     }
 }
 
 fn wave_timer_ui(
     mut text_query: Query<&mut Text, With<WaveTimerUi>>,
-    wave_controller_query: Query<&mut WaveController>,
+    wave_controller: Res<WaveController>,
 ) {
     let Ok(mut text) = text_query.get_single_mut() else {
-        return;
-    };
-
-    let Ok(wave_controller) = wave_controller_query.get_single() else {
         return;
     };
 
@@ -553,12 +473,11 @@ impl Plugin for WavePlugin {
         app.add_systems(
             Update,
             (
+                (boundary_collision, spawn_enemies).in_set(WaveRunningSet),
                 (health_ui, wave_timer_tick, wave_timer_ui),
                 prepare.run_if(in_state(WaveState::Preparation)),
             ).run_if(in_state(GameState::Wave)),
         );
-
-        (boundary_collision, spawn_enemies).in_set(WaveRunningSet);
 
         app.configure_sets(Update, WaveRunningSet.run_if(in_state(WaveState::Running)));
 

@@ -9,7 +9,7 @@ pub struct ShopPlugin;
 struct Shop;
 
 fn setup_shop(mut game_controller: ResMut<GameController>, mut next_state: ResMut<NextState<GameState>>) {
-    game_controller.wave += 1;
+    game_controller.wave_level += 1;
     next_state.set(GameState::Wave);
 }
 
