@@ -63,7 +63,7 @@ fn destroy_menu(mut commands: Commands, query: Query<Entity, With<Menu>>) {
     }
 }
 
-fn setup_menu(asset_handles: Res<AssetHandles>, mut commands: Commands) {
+fn setup_menu(asset_handles: Res<AssetHandles>, asset_server: Res<AssetServer>, mut commands: Commands) {
     commands
         .spawn((
             BackgroundColor(Color::BLACK),
@@ -97,6 +97,21 @@ fn setup_menu(asset_handles: Res<AssetHandles>, mut commands: Commands) {
                         },
                     ));
                 });
+            parent.spawn(Node {
+                display: Display::Flex,
+                justify_content: JustifyContent::Center,
+                width: Val::Percent(100.0),
+                ..default()
+            }).with_children(|parent| {
+                parent.spawn((
+                    ImageNode::new(asset_server.load("sprites/title.png")),
+                    Node {
+                        height: Val::VMin(70.0),
+                        width: Val::VMin(70.0),
+                        ..default()
+                    },
+                ));
+            });
             parent
                 .spawn(Node {
                     align_items: AlignItems::Center,
